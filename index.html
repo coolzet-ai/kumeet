@@ -36,7 +36,10 @@
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.55}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.55;word-break:keep-all;overflow-wrap:break-word}
+p,li,small,.hint,.notice,.wk-note,.ck p,.aiopt p,.drop b,.wk-meta{text-wrap:balance}
+h1,h2,h3,h4,.ck b{text-wrap:balance}
+br.bh{display:inline}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--paper)}
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--green);outline-offset:2px}
@@ -280,6 +283,23 @@ details.aiopt[open] summary::before{content:"▾"}
 .optrow:last-child{border-bottom:0}
 .gnb .tab-admin{color:var(--gold)}
 .gnb .tab-admin[aria-selected="true"]{color:var(--gold);border-bottom-color:var(--gold)}
+.wk-n{font-family:var(--f-mono);font-size:10.5px;background:var(--green-soft);color:var(--green-deep);border-radius:8px;padding:0 6px}
+.wk-saved{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.wk-note{margin:0;font-size:12px;color:var(--muted)}
+.wklist{display:grid;gap:6px;max-height:min(56vh,520px);overflow:auto}
+.wk{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:9px 11px}
+.wk.cur{border-color:var(--green-mid);background:var(--green-soft)}
+.wk-main{display:grid;gap:2px;min-width:0}
+.wk-main b{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wk-main span{font-size:11.5px;color:var(--muted)}
+.wk-main .in{padding:4px 6px;font-size:13px}
+.wk-act{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.wk-act .btn{padding:4px 9px;font-size:12px}
+.wk-tag{font-size:10px;font-weight:700;border-radius:3px;padding:1px 5px;background:var(--green);color:#fff;margin-left:6px;vertical-align:1px}
+.wk-empty{padding:28px 10px;text-align:center;color:var(--muted);font-size:12.5px;border:1px dashed var(--line);border-radius:6px}
+.toast{display:flex;gap:12px;align-items:center}
+.toast-act{border:0;background:none;color:var(--green-mid);font-weight:700;cursor:pointer;font-size:12.5px;padding:0}
+@media (max-width:520px){.wk{grid-template-columns:minmax(0,1fr)}.wk-act{justify-content:flex-start}}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 </style>
 
@@ -309,12 +329,13 @@ details.aiopt[open] summary::before{content:"▾"}
 
 <div class="wrap" id="view-write">
   <div class="notice-bar" id="noticeBar" hidden><b>공지</b><span id="noticeText"></span></div>
-  <div class="banner" id="exampleBanner" hidden>예시 회의가 들어 있습니다. 이름·수치는 모두 예시입니다. <button class="btn" id="btnNew2">새로 쓰기</button></div>
+  <div class="banner" id="exampleBanner" hidden>예시 회의가 들어 있습니다. 이름·수치는 모두 예시이며 보관함에 저장되지 않습니다. <button class="btn" id="btnNew2">＋ 새 작업 시작</button></div>
 
   <div class="bar" style="margin-top:12px">
+    <button class="btn" id="btnNewWork" title="지금 작업을 보관하고 새 회의록을 시작합니다">＋ 새 작업</button>
+    <button class="btn" id="btnArchive" title="보관한 작업 보기">보관함 <span class="wk-n" id="wkCnt">0</span></button>
     <select class="sel" id="loadSel" aria-label="불러오기">
       <option value="">불러오기 ▾</option>
-      <option value="new">새로 쓰기 (모두 비우기)</option>
       <option value="example">예시 회의 불러오기</option>
       <option value="bundle-save">작업 파일로 저장 (.json)</option>
       <option value="bundle-load">작업 파일 불러오기</option>
@@ -327,6 +348,7 @@ details.aiopt[open] summary::before{content:"▾"}
     </select>
     <label class="chk"><input type="checkbox" id="optLink" checked> 사업 연계 강조</label>
     <label class="chk"><input type="checkbox" id="optPrecise"> 정밀 작성</label>
+    <span class="wk-saved" id="wkSaved" aria-live="polite"></span>
     <span class="sp"></span>
     <button class="btn" id="btnPrompt" title="AI 연결이 안 될 때 다른 AI 채팅에서 쓰기">✎ 다른 AI용 프롬프트</button>
     <button class="btn primary" id="btnGen">회의록 생성</button>
@@ -686,7 +708,16 @@ details.aiopt[open] summary::before{content:"▾"}
     </form>
   </div>
 </div>
-<div class="toast" id="toast" hidden></div>
+<div class="modal" id="wkModal" hidden>
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="wkTitle">
+    <div class="row2" style="align-items:center"><h3 id="wkTitle" style="flex:1">작업 보관함</h3><button class="btn primary" id="wkNew">＋ 새 작업</button></div>
+    <p class="wk-note">작업은 이 브라우저에 자동으로 보관됩니다(사진·영수증 포함, 최대 30개). 다른 PC로 옮길 때는 ‘불러오기 ▾ → 작업 파일로 저장’을 쓰세요.</p>
+    <input class="in" id="wkSearch" placeholder="회의명·날짜·단위과제로 찾기" aria-label="보관함 검색">
+    <div class="wklist" id="wkList"></div>
+    <div class="row2"><span class="wk-note" id="wkFoot" style="flex:1;align-self:center"></span><button class="btn ghost" id="wkClose">닫기</button></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden><span id="toastT"></span><button class="toast-act" id="toastA" hidden></button></div>
 
 <script>
 (() => {
@@ -744,11 +775,11 @@ let busy = null;
 const won = n => (Number(n)||0).toLocaleString("ko-KR");
 const num = v => Number(String(v||"").replace(/[^\d]/g,""))||0;
 const esc = s => String(s??"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-function toast(t){ const el=$("#toast"); el.textContent=t; el.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>el.hidden=true,2600); }
+function toast(t,act){ const el=$("#toast"), a=$("#toastA"); $("#toastT").textContent=t; a.hidden=!act; if(act){ a.textContent=act.label; a.onclick=()=>{ el.hidden=true; act.run(); }; } el.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>el.hidden=true, act?7000:2600); }
 function status(t, kind){ const el=$("#status"); el.className="status"+(kind==="err"?" err":""); el.innerHTML = (kind==="busy"?'<span class="spin"></span>':"") + "<span></span>"; el.lastChild.textContent=t||""; }
 
 /* ---------- 저장 ---------- */
-function persist(){ try{ const {photos,receipts,...rest}=S; localStorage.setItem("kuminutes.v1", JSON.stringify(rest)); localStorage.setItem("kuminutes.units", JSON.stringify(units)); localStorage.setItem("kuminutes.opts", JSON.stringify(O)); }catch(e){} }
+function persist(){ try{ const {photos,receipts,...rest}=S; localStorage.setItem("kuminutes.v1", JSON.stringify(rest)); localStorage.setItem("kuminutes.units", JSON.stringify(units)); localStorage.setItem("kuminutes.opts", JSON.stringify(O)); }catch(e){} scheduleWorkSave(); }
 function restore(){ try{ const u=JSON.parse(localStorage.getItem("kuminutes.units")||"null"); if(u&&u.ext) units=u; const o=JSON.parse(localStorage.getItem("kuminutes.opts")||"null"); if(o) O={...O,...o};const r=JSON.parse(localStorage.getItem("kuminutes.v1")||"null"); if(r){ S={...blank(),...r,photos:[],receipts:[]}; return true; } }catch(e){} return false; }
 
 /* ---------- 예시 ---------- */
@@ -1210,8 +1241,8 @@ $("#btnCopy").onclick=()=>{ if(!S.content){ toast("복사할 회의내용이 없
 
 /* ---------- 불러오기 ---------- */
 function reset(to){ S.photos.concat(S.receipts).forEach(p=>URL.revokeObjectURL(p.url)); S = to==="example"? exampleState() : blank(); $("#depth").value="auto"; fillInputs(); persist(); status(to==="example"?"예시 회의를 불러왔습니다.":"새로 쓰기 시작합니다."); }
-$("#loadSel").onchange=e=>{ const v=e.target.value; e.target.value=""; if(v==="bundle-save") return saveBundle(); if(v==="bundle-load") return $("#inBundle").click(); if(v) reset(v); };
-$("#btnNew2").onclick=()=>reset("new");
+$("#loadSel").onchange=async e=>{ const v=e.target.value; e.target.value=""; if(v==="bundle-save") return saveBundle(); if(v==="bundle-load") return $("#inBundle").click(); if(v==="example"){ await saveWorkNow(); WK.cur=null; try{ localStorage.removeItem("kuminutes.cur"); }catch(err){} reset("example"); updateWkUi(); } };
+$("#btnNew2").onclick=()=>newWork();
 
 /* ---------- 내보내기 ---------- */
 function fileBase(){ const d=(S.info.date||"").replace(/-/g,""); return `회의록_${d||"날짜미정"}_${(S.info.title||"회의").replace(/[\\/:*?"<>|\[\]]/g,"").slice(0,40).trim()}`; }
@@ -1457,11 +1488,12 @@ $("#inBundle").onchange=async e=>{
   const f=e.target.files[0]; e.target.value=""; if(!f) return;
   try{
     const b=JSON.parse(await f.text()); if(b.kind!=="ku-minutes-work") throw new Error("회의김군 작업 파일이 아닙니다");
+    await saveWorkNow(); WK.cur=null; try{ localStorage.removeItem("kuminutes.cur"); }catch(err){}
     S.photos.concat(S.receipts).forEach(p=>URL.revokeObjectURL(p.url));
     S={...blank(), ...b.state, photos:[], receipts:[], example:false};
     for(const [k,list] of [["photos",b.photos||[]],["receipts",b.receipts||[]]]) for(const p of list){ try{ const bl=await dataURLtoBlob(p.data); S[k].push({name:p.name, proof:!!p.proof, blob:bl, url:URL.createObjectURL(bl)}); }catch(err){} }
     if(b.opts){ for(const k of Object.keys(b.opts)) if(k in O) O[k]=b.opts[k]; enforceOpts(); }
-    fillInputs(); persist(); status(`작업을 불러왔습니다 · 자료 ${S.docs.length}건, 사진 ${S.photos.length}장, 영수증 ${S.receipts.length}장`);
+    fillInputs(); persist(); saveWorkNow(); status(`작업을 불러왔습니다 · 자료 ${S.docs.length}건, 사진 ${S.photos.length}장, 영수증 ${S.receipts.length}장`);
   }catch(err){ status("작업 파일을 읽지 못했습니다: "+err.message,"err"); }
 };
 
@@ -1563,10 +1595,131 @@ $("#pwChange").onclick=async()=>{ const a=$("#pwNew").value, b=$("#pwNew2").valu
 $("#optPrecise").addEventListener("change",e=>{ e.target.dataset.touched="1"; });
 if(admin) showAdminTab(true);
 
+
+/* ---------- 작업 보관함 (IndexedDB, 이 브라우저) ---------- */
+const WK={db:null, cur:null, list:[], timer:null, lastSaved:0, max:30, deleted:null};
+try{ WK.cur=localStorage.getItem("kuminutes.cur")||null; }catch(e){}
+function wkOpen(){ return new Promise((res)=>{ try{ const r=indexedDB.open("kuminutes",1); r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains("works")) r.result.createObjectStore("works",{keyPath:"id"}); }; r.onsuccess=()=>res(r.result); r.onerror=()=>res(null); r.onblocked=()=>res(null); }catch(e){ res(null); } }); }
+function wkReq(mode, fn){ return new Promise((res,rej)=>{ try{ const t=WK.db.transaction("works",mode); const q=fn(t.objectStore("works")); t.oncomplete=()=>res(q?q.result:undefined); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error); }catch(e){ rej(e); } }); }
+const wkId=()=> "w"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function wkAutoName(){ return S.info.title || (S.info.task? S.info.task+" 회의" : "") || "제목 없는 회의"; }
+function wkMeta(){ return { title:S.info.title||"", date:S.info.date||"", task:S.info.task||"", docs:S.docs.length, photos:S.photos.length, receipts:S.receipts.length, att:S.att.filter(a=>a.name||a.org).length, chars:(S.content||"").replace(/\s/g,"").length }; }
+async function wkRefresh(){ if(!WK.db) return; try{ const all=await wkReq("readonly", s=>s.getAll()); WK.list=(all||[]).map(({state,photos,receipts,...m})=>m).sort((a,b)=>b.updatedAt-a.updatedAt); }catch(e){} updateWkUi(); }
+function updateWkUi(){ $("#wkCnt").textContent=WK.list.length; const el=$("#wkSaved"); if(!WK.db){ el.textContent=""; return; } if(S.example){ el.textContent="예시 · 보관 안 함"; return; } if(!WK.cur){ el.textContent= hasWork()? "보관 대기" : ""; return; } const d=new Date(WK.lastSaved||Date.now()); el.textContent= WK.lastSaved? `자동 보관됨 · ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}` : ""; }
+function scheduleWorkSave(){ if(!WK.db) return; clearTimeout(WK.timer); WK.timer=setTimeout(saveWorkNow, 1200); }
+async function saveWorkNow(){
+  clearTimeout(WK.timer);
+  if(!WK.db || S.example || !hasWork()) { updateWkUi(); return; }
+  const now=Date.now(); let prev=null;
+  if(!WK.cur){ WK.cur=wkId(); try{ localStorage.setItem("kuminutes.cur", WK.cur); }catch(e){} }
+  else prev=WK.list.find(x=>x.id===WK.cur)||null;
+  const {photos,receipts,...rest}=S;
+  const rec={ id:WK.cur, name: prev&&prev.nameLocked? prev.name : wkAutoName(), nameLocked: !!(prev&&prev.nameLocked), createdAt: prev?prev.createdAt:now, updatedAt:now, meta:wkMeta(),
+    state:JSON.parse(JSON.stringify(rest)), opts:{...O}, photos:photos.map(p=>({name:p.name, proof:!!p.proof, blob:p.blob})), receipts:receipts.map(p=>({name:p.name, blob:p.blob})) };
+  try{ await wkReq("readwrite", s=>s.put(rec)); WK.lastSaved=now; }
+  catch(e){ // 용량 부족 등: 이미지 빼고 다시
+    try{ rec.photos=[]; rec.receipts=[]; rec.meta.noImages=true; await wkReq("readwrite", s=>s.put(rec)); WK.lastSaved=now; status("보관함 저장 공간이 부족해 사진·영수증은 빼고 보관했습니다.","err"); }catch(err){ status("작업을 보관하지 못했습니다.","err"); } }
+  await wkRefresh(); await wkPrune();
+}
+async function wkPrune(){ const extra=WK.list.filter(x=>x.id!==WK.cur).slice(WK.max-1); if(!extra.length) return; try{ await wkReq("readwrite", s=>{ extra.forEach(x=>s.delete(x.id)); return null; }); toast(`보관함이 가득 차 오래된 작업 ${extra.length}개를 정리했습니다`); }catch(e){} await wkRefresh(); }
+async function wkLoad(id){
+  const rec=await wkReq("readonly", s=>s.get(id)); if(!rec) throw new Error("작업을 찾지 못했습니다");
+  S.photos.concat(S.receipts).forEach(p=>URL.revokeObjectURL(p.url));
+  S={...blank(), ...rec.state, photos:[], receipts:[], example:false};
+  for(const p of rec.photos||[]) if(p.blob) S.photos.push({name:p.name, proof:!!p.proof, blob:p.blob, url:URL.createObjectURL(p.blob)});
+  for(const p of rec.receipts||[]) if(p.blob) S.receipts.push({name:p.name, blob:p.blob, url:URL.createObjectURL(p.blob)});
+  if(rec.opts){ for(const k of Object.keys(rec.opts)) if(k in O) O[k]=rec.opts[k]; enforceOpts(); }
+  WK.cur=id; WK.lastSaved=rec.updatedAt; try{ localStorage.setItem("kuminutes.cur", id); }catch(e){}
+  $("#depth").value="auto"; fillInputs(); try{ const {photos,receipts,...rest}=S; localStorage.setItem("kuminutes.v1", JSON.stringify(rest)); }catch(e){}
+  updateWkUi();
+}
+async function newWork(silent){
+  await saveWorkNow();
+  S.photos.concat(S.receipts).forEach(p=>URL.revokeObjectURL(p.url));
+  WK.cur=null; try{ localStorage.removeItem("kuminutes.cur"); }catch(e){}
+  S=blank(); enforceOpts(); $("#depth").value="auto"; fillInputs(); persist(); updateWkUi();
+  if(!silent){ status("새 작업을 시작합니다. 이전 작업은 보관함에 있습니다."); toast("이전 작업을 보관함에 넣고 새 작업을 시작했습니다"); }
+}
+function fmtTime(t){ const d=new Date(t), n=new Date(); const hm=`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; return d.toDateString()===n.toDateString()? `오늘 ${hm}` : `${d.getMonth()+1}. ${d.getDate()}. ${hm}`; }
+function renderWk(){
+  const q=$("#wkSearch").value.trim().toLowerCase(), box=$("#wkList"); box.innerHTML="";
+  const L=WK.list.filter(x=>!q || [x.name,x.meta&&x.meta.date,x.meta&&x.meta.task,x.meta&&x.meta.title].join(" ").toLowerCase().includes(q));
+  if(!L.length){ box.innerHTML=`<div class="wk-empty">${WK.list.length?"찾는 작업이 없습니다.":"보관한 작업이 없습니다. 자료를 넣거나 회의 정보를 쓰면 자동으로 보관됩니다."}</div>`; }
+  L.forEach(x=>{
+    const m=x.meta||{}, cur=x.id===WK.cur;
+    const el=document.createElement("div"); el.className="wk"+(cur?" cur":"");
+    el.innerHTML=`<div class="wk-main"><b></b><span class="wk-meta"></span></div><div class="wk-act">${cur?"":'<button class="btn" data-a="open">열기</button>'}<button class="btn ghost" data-a="ren">이름 바꾸기</button><button class="btn ghost danger" data-a="del">지우기</button></div>`;
+    const b=el.querySelector("b"); b.textContent=x.name||"제목 없는 회의"; if(cur){ const t=document.createElement("span"); t.className="wk-tag"; t.textContent="지금 작업"; b.appendChild(t); }
+    el.querySelector(".wk-meta").textContent=[m.date? m.date.replace(/-/g,". ")+".":"날짜 미정", m.att?`참석 ${m.att}명`:"", m.docs?`자료 ${m.docs}`:"", m.photos?`사진 ${m.photos}`:"", m.receipts?`영수증 ${m.receipts}`:"", m.chars?`회의내용 ${won(m.chars)}자`:"회의내용 없음", m.noImages?"사진 빠짐":"", `수정 ${fmtTime(x.updatedAt)}`].filter(Boolean).join(" · ");
+    el.querySelector('[data-a="open"]')?.addEventListener("click", async()=>{ await saveWorkNow(); try{ await wkLoad(x.id); $("#wkModal").hidden=true; status(`‘${x.name}’ 작업을 열었습니다.`); }catch(e){ toast(e.message); } });
+    el.querySelector('[data-a="ren"]').addEventListener("click", ()=>{
+      const main=el.querySelector(".wk-main"); const inp=document.createElement("input"); inp.className="in"; inp.value=x.name||""; inp.setAttribute("aria-label","작업 이름"); main.replaceChild(inp, main.querySelector("b")); inp.focus(); inp.select();
+      let done=false; const fin=async(ok)=>{ if(done) return; done=true; const v=inp.value.trim(); if(ok && v && v!==x.name){ try{ const rec=await wkReq("readonly", s=>s.get(x.id)); if(rec){ rec.name=v; rec.nameLocked=true; await wkReq("readwrite", s=>s.put(rec)); } }catch(e){} await wkRefresh(); } renderWk(); };
+      inp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); fin(true); } if(e.key==="Escape"){ e.preventDefault(); e.stopPropagation(); fin(false); } });
+      inp.addEventListener("blur", ()=>fin(true));
+    });
+    el.querySelector('[data-a="del"]').addEventListener("click", async()=>{
+      let rec=null; try{ rec=await wkReq("readonly", s=>s.get(x.id)); await wkReq("readwrite", s=>s.delete(x.id)); }catch(e){ return; }
+      const wasCur = x.id===WK.cur;
+      if(wasCur){ WK.cur=null; try{ localStorage.removeItem("kuminutes.cur"); }catch(e){} S.photos.concat(S.receipts).forEach(p=>URL.revokeObjectURL(p.url)); S=blank(); enforceOpts(); fillInputs(); try{ localStorage.removeItem("kuminutes.v1"); }catch(e){} }
+      await wkRefresh(); renderWk();
+      toast(`‘${x.name}’을(를) 지웠습니다`, {label:"되돌리기", run: async()=>{ try{ await wkReq("readwrite", s=>s.put(rec)); if(wasCur) await wkLoad(rec.id); await wkRefresh(); if(!$("#wkModal").hidden) renderWk(); toast("되돌렸습니다"); }catch(e){} }});
+    });
+    box.appendChild(el);
+  });
+  $("#wkFoot").textContent = `${WK.list.length} / ${WK.max}개`;
+}
+async function openArchive(){ await saveWorkNow(); await wkRefresh(); $("#wkSearch").value=""; renderWk(); $("#wkModal").hidden=false; $("#wkSearch").focus(); }
+$("#btnArchive").onclick=()=>{ if(!WK.db){ toast("이 브라우저에서는 보관함을 쓸 수 없습니다. ‘작업 파일로 저장’을 쓰세요"); return; } openArchive(); };
+$("#btnNewWork").onclick=()=>newWork();
+$("#wkNew").onclick=async()=>{ $("#wkModal").hidden=true; await newWork(); };
+$("#wkClose").onclick=()=>$("#wkModal").hidden=true;
+$("#wkSearch").addEventListener("input", renderWk);
+$("#wkModal").addEventListener("keydown", e=>{ if(e.key==="Escape") $("#wkModal").hidden=true; });
+window.addEventListener("pagehide", ()=>{ if(WK.timer){ saveWorkNow(); } });
+async function initWorks(){
+  WK.db=await wkOpen(); if(!WK.db){ $("#btnArchive").title="이 브라우저에서는 보관함을 쓸 수 없습니다"; updateWkUi(); return; }
+  await wkRefresh();
+  if(WK.cur && WK.list.some(x=>x.id===WK.cur)){ try{ await wkLoad(WK.cur); }catch(e){} }
+  else { WK.cur=null; try{ localStorage.removeItem("kuminutes.cur"); }catch(e){} if(hasWork()) await saveWorkNow(); }
+  updateWkUi();
+}
+
+
+/* ---------- 줄바꿈 다듬기: 어절 단위로 끊고, 두 줄이면 아랫줄이 더 길게 ---------- */
+const BH_SEL='p, li, small, .hint, .notice, .wk-note, .drop b, .wk-meta, .aiNow span, .gl li, .steps li';
+const BH_SKIP='.sheet, [contenteditable], textarea, select, .toast, .sh-proj, .att, .thumbs';
+let bhObs=null, bhTimer=null;
+function bhClear(el){ const bs=el.querySelectorAll('br.bh'); if(!bs.length) return; bs.forEach(b=>{ const p=b.parentNode; b.remove(); p.normalize(); }); }
+function bhLines(el){ const r=document.createRange(); r.selectNodeContents(el); const bs=[...r.getClientRects()].filter(c=>c.width>1).map(c=>c.bottom).sort((a,b)=>a-b); if(!bs.length) return 0; const lh=parseFloat(getComputedStyle(el).lineHeight)||16; let n=1, last=bs[0]; for(const b of bs){ if(b-last>lh*0.6){ n++; last=b; } } return n; }
+function bhJoin(el){ const tw=document.createTreeWalker(el,NodeFilter.SHOW_TEXT); let n; while((n=tw.nextNode())){ if(/[^\u2060]·|·[^\u2060]/.test(n.data)) n.data=n.data.replace(/\u2060?·\u2060?/g,"\u2060·\u2060"); if(/[’”)\]>」』](?=[가-힣])/.test(n.data)) n.data=n.data.replace(/([’”)\]>」』])(?=[가-힣])/g,"$1\u2060"); } }
+function bhApply(el){
+  bhClear(el);
+  if(!el.closest(BH_SKIP)) bhJoin(el);
+  if(el.closest(BH_SKIP) || el.querySelector('p,div,ul,ol,li,table,input,textarea,select,button,br,img,svg')) return;
+  const txt=el.textContent.trim(); if(txt.length<14 || txt.length>320 || !/\s/.test(txt)) return;
+  const cs=getComputedStyle(el); if(cs.display==="none"||cs.visibility==="hidden"||cs.whiteSpace.startsWith("pre")||cs.whiteSpace==="nowrap") return;
+  const W=el.clientWidth-(parseFloat(cs.paddingLeft)||0)-(parseFloat(cs.paddingRight)||0); if(W<40) return;
+  if(bhLines(el)!==2) return;
+  const prev=el.style.whiteSpace; el.style.whiteSpace="nowrap";
+  const all=document.createRange(); all.selectNodeContents(el); const box=all.getBoundingClientRect(); const T=box.width, x0=box.left;
+  const tw=document.createTreeWalker(el,NodeFilter.SHOW_TEXT); let n, best=null;
+  while((n=tw.nextNode())){ for(let i=0;i<n.data.length;i++){ if(n.data[i]!==" ") continue; const rr=document.createRange(); rr.setStart(el,0); rr.setEnd(n,i); const w=rr.getBoundingClientRect().right-x0; if(w>8 && w<=T*0.5 && T-w<=W-4) best=[n,i]; } }
+  el.style.whiteSpace=prev;
+  if(!best) return;
+  const after=best[0].splitText(best[1]+1); const br=document.createElement("br"); br.className="bh"; after.parentNode.insertBefore(br,after);
+  if(bhLines(el)!==2) bhClear(el);
+}
+function bhRun(){ if(bhObs) bhObs.disconnect(); try{ document.querySelectorAll(BH_SEL).forEach(el=>{ try{ bhApply(el); }catch(e){} }); }finally{ if(bhObs){ bhObs.takeRecords(); bhObs.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:["hidden","class"]}); } } }
+function bhSchedule(){ clearTimeout(bhTimer); bhTimer=setTimeout(bhRun,120); }
+try{ bhObs=new MutationObserver(muts=>{ if(muts.some(m=>!(m.target.closest&&m.target.closest(".sheet")) )) bhSchedule(); }); }catch(e){}
+window.addEventListener("resize", bhSchedule);
+try{ document.fonts&&document.fonts.ready.then(bhSchedule); }catch(e){}
+
 /* ---------- 시작 ---------- */
 loadLocalCfg(); applyCfg();
 if(!restore()) S=exampleState();
-enforceOpts(); fillInputs(); loadRemoteCfg();
+enforceOpts(); fillInputs(); loadRemoteCfg(); initWorks(); bhRun();
 })();
 </script>
 
