@@ -90,6 +90,7 @@ a.btn{text-decoration:none;color:inherit}
 .btn.primary{background:var(--green);border-color:var(--green);color:var(--green-ink);font-weight:700;padding:7px 14px}
 .btn.primary:hover{background:var(--btn)}
 .btn.primary[disabled]{opacity:.55;cursor:progress}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
 .btn.ghost{border-color:transparent;color:var(--muted)}
 .btn.danger{color:var(--red-ink)}
 .sel{border:1px solid var(--line);background:var(--paper);border-radius:var(--r);padding:5px 8px;font-size:12.5px}
@@ -257,7 +258,15 @@ footer .wrap{padding-block:16px;font-size:11.5px;color:var(--muted);display:grid
 .aiopt h4{margin:0;font-size:13.5px;display:flex;gap:6px;align-items:center}
 .aiopt p{margin:0;font-size:12.5px;color:var(--muted)}
 .aiopt small{font-size:11.5px;color:var(--muted)}
-.aiNow{margin:0;font-size:12.5px;padding:8px 10px;border-radius:5px;background:var(--bg)}
+.aiNow{margin:0;font-size:12.5px;padding:9px 12px;border-radius:6px;background:var(--bg);display:grid;gap:2px;border-left:4px solid var(--line)}
+.aiNow.on{border-left-color:var(--green)} .aiNow.api{border-left-color:var(--teal)} .aiNow.off{border-left-color:#d79a1c}
+.aiNow b{font-size:13.5px}
+.aiNow span{color:var(--muted)}
+.steps{margin:0;padding-left:18px;font-size:12.5px;color:var(--muted);display:grid;gap:3px}
+.steps b{color:var(--ink)}
+details.aiopt summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px}
+details.aiopt summary::before{content:"▸";color:var(--muted);font-size:11px}
+details.aiopt[open] summary::before{content:"▾"}
 .notice-bar{display:flex;gap:10px;align-items:flex-start;background:var(--green-soft);color:var(--green-deep);border-radius:var(--r);padding:8px 12px;font-size:12.5px;margin-top:12px;white-space:pre-wrap}
 .notice-bar b{flex:none}
 .adm{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:12px;align-items:start}
@@ -307,6 +316,8 @@ footer .wrap{padding-block:16px;font-size:11.5px;color:var(--muted);display:grid
       <option value="">불러오기 ▾</option>
       <option value="new">새로 쓰기 (모두 비우기)</option>
       <option value="example">예시 회의 불러오기</option>
+      <option value="bundle-save">작업 파일로 저장 (.json)</option>
+      <option value="bundle-load">작업 파일 불러오기</option>
     </select>
     <select class="sel" id="depth" aria-label="회의내용 분량">
       <option value="auto">분량: 참석자 수에 맞춤</option>
@@ -352,6 +363,7 @@ footer .wrap{padding-block:16px;font-size:11.5px;color:var(--muted);display:grid
               <b>회의자료 끌어놓기 또는 눌러서 선택</b>
               <small>PDF · Word(.docx) · 한글(.hwpx) · PPT(.pptx) · Excel · TXT/MD/CSV — .hwp는 PDF로 저장해 넣어 주세요</small>
             </div>
+            <input type="file" id="inBundle" accept=".json,application/json" hidden>
             <input type="file" id="inDocs" multiple hidden accept=".pdf,.docx,.hwpx,.pptx,.xlsx,.xls,.csv,.txt,.md,.vtt,.srt,.json">
             <div class="files" id="docList"></div>
           </div>
@@ -623,22 +635,36 @@ footer .wrap{padding-block:16px;font-size:11.5px;color:var(--muted);display:grid
 </div>
 <div class="modal" id="aiModal" hidden>
   <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
-    <h3 id="aiTitle">Claude 연결하기</h3>
-    <p class="aiNow" id="aiNow"></p>
-    <section class="aiopt" data-ai="open">
-      <h4>Claude에서 회의김군 열기 <span class="tag">추천</span></h4>
-      <p>claude.ai에 로그인한 상태로 열면 본인 Claude 계정으로 바로 생성합니다. 사진·영수증 판독도 됩니다. 사용량은 본인 계정에서 차감됩니다.</p>
-      <div class="row2"><a class="btn primary" id="aiOpenLink" target="_blank" rel="noopener">Claude에서 열기</a></div>
-      <small>열리지 않으면 Teams 채팅으로 만든이에게 공유를 요청하세요. 지금 입력한 내용은 옮겨지지 않으니 자료를 다시 넣어야 합니다.</small>
+    <h3 id="aiTitle">Claude 연결</h3>
+    <div class="aiNow" id="aiNow"><b id="aiNowT"></b><span id="aiNowD"></span></div>
+
+    <section class="aiopt" data-ai="mine-claude" hidden>
+      <h4>내 Claude 계정 <span class="tag">추천</span></h4>
+      <p id="mineState"></p>
+      <div class="row2"><button class="btn primary" id="mineAllow" hidden>Claude 사용 허용하기</button><button class="btn" id="minePerm" hidden>권한 설정 열기</button><button class="btn ghost" id="mineReload" hidden>페이지 새로 열기 안내</button></div>
     </section>
-    <section class="aiopt" data-ai="perm" hidden>
-      <h4>Claude 사용 허용하기</h4>
-      <p>이 화면에서 Claude 사용이 허용되지 않았습니다. 권한 설정에서 Claude 사용을 허용한 뒤 페이지를 새로 열어 주세요.</p>
-      <div class="row2"><button class="btn primary" id="aiPerm">권한 설정 열기</button></div>
+
+    <section class="aiopt" data-ai="mine-file" hidden>
+      <h4>내 Claude 계정으로 쓰기 <span class="tag">추천</span></h4>
+      <p>본인 Claude 계정으로 쓰려면 claude.ai에 올린 회의김군 페이지에서 열어야 합니다. 이 파일이나 GitHub Pages 주소에서는 Claude 로그인을 할 수 없습니다. Claude가 다른 사이트에 계정 로그인을 열어 주지 않기 때문입니다.</p>
+      <ol class="steps">
+        <li><b>작업 넘기기</b> — 지금 넣은 자료·참석자·회의내용을 파일로 저장합니다. 비어 있으면 건너뜁니다.</li>
+        <li><b>Claude에서 열기</b> — claude.ai에 학교 계정으로 로그인된 브라우저에서 열립니다.</li>
+        <li><b>작업 불러오기</b> — Claude 페이지의 ‘불러오기 ▾’에서 저장한 파일을 고릅니다.</li>
+      </ol>
+      <div class="row2"><button class="btn" id="handoffSave">① 작업 파일 저장</button><a class="btn primary" id="aiOpenLink" target="_blank" rel="noopener">② Claude에서 열기</a></div>
+      <small>사용량은 본인 Claude 요금제(Pro·Team 등)에서 차감됩니다. 페이지가 열리지 않으면 Teams 채팅으로 만든이에게 공유를 요청하세요.</small>
     </section>
-    <section class="aiopt" data-ai="key">
-      <h4>Anthropic API 키로 연결</h4>
-      <p>API 키가 있으면 이 페이지에서 바로 Claude를 부릅니다. 요금은 키를 발급한 API 계정에 청구됩니다. 키는 Anthropic 서버로만 보내집니다.</p>
+
+    <section class="aiopt" data-ai="chat">
+      <h4>Claude 대화창에서 쓰기</h4>
+      <p>요청문을 복사하고 Claude 새 대화를 엽니다. 붙여넣어 받은 JSON 답을 이 페이지에 다시 붙여넣으면 서식에 채워집니다. 사진은 대화창에 직접 첨부하세요. 로그인된 브라우저라면 어디서나 됩니다.</p>
+      <div class="row2"><a class="btn" id="aiChat" href="https://claude.ai/new" target="_blank" rel="noopener">요청문 복사하고 Claude 열기</a></div>
+    </section>
+
+    <details class="aiopt" data-ai="key">
+      <summary><h4 style="display:inline">API 키로 연결 <span class="tag w">관리자·개발용</span></h4></summary>
+      <p>Anthropic 콘솔에서 발급한 API 키로 이 페이지에서 바로 부릅니다. 요금은 Claude 요금제가 아니라 키를 발급한 API 계정에 따로 청구됩니다. 키는 Anthropic 서버로만 보내집니다.</p>
       <div class="row2"><input class="in" type="password" id="apiKey" placeholder="sk-ant-로 시작하는 키" autocomplete="off" spellcheck="false" aria-label="API 키"><button class="btn" id="apiTest">연결 확인</button></div>
       <div class="fgrid">
         <label class="f">기본 모델<select class="in" id="apiModel"><option value="">연결 확인 후 선택</option></select></label>
@@ -646,12 +672,7 @@ footer .wrap{padding-block:16px;font-size:11.5px;color:var(--muted);display:grid
       </div>
       <label class="chk"><input type="checkbox" id="apiRemember"> 이 기기에 키 기억 (공용 PC에서는 끄세요)</label>
       <div class="row2"><span id="apiMsg" style="font-size:12px;color:var(--muted);align-self:center;flex:1"></span><button class="btn ghost danger" id="apiForget">키 지우기</button></div>
-    </section>
-    <section class="aiopt" data-ai="chat">
-      <h4>Claude 채팅에 붙여넣기</h4>
-      <p>요청문을 복사하고 Claude 새 채팅을 엽니다. 붙여넣어 받은 JSON을 이 페이지에 다시 붙여넣으면 적용됩니다. 사진은 채팅에 직접 첨부하세요.</p>
-      <div class="row2"><a class="btn" id="aiChat" href="https://claude.ai/new" target="_blank" rel="noopener">요청문 복사하고 Claude 열기</a></div>
-    </section>
+    </details>
     <div class="row2"><button class="btn ghost" id="aiClose">닫기</button></div>
   </div>
 </div>
@@ -1143,13 +1164,14 @@ async function generate(){
   const opts={ signal:busy.signal, precise:$("#optPrecise").checked, onText:({text})=>status(`회의록 작성 중… ${won(text.length)}자`,"busy"), images:S.photos.slice(0, aiImgMax()).map(p=>p.blob) };
   try{
     const r=await aiJson(buildPrompt(), opts);
+    if(aiMode()==="claude" && samplePerm!=="granted"){ samplePerm="granted"; setPill(); }
     const a=applyResult(r);
     status(`완료${a.summary?": "+a.summary:""}${a.added?` · 참석자 ${a.added}명 추가`:""}${a.filled?` · 회의 정보 ${a.filled}칸 채움`:""}`);
     toast("회의록을 채웠습니다. 점검 탭을 확인하세요");
   }catch(e){
     const msg={cancelled:"멈췄습니다.", not_granted:"AI 사용을 허용하지 않아 생성할 수 없습니다. 다른 AI용 프롬프트를 쓰세요.", sampling_disabled:"이 계정에서는 AI를 쓸 수 없습니다. 다른 AI용 프롬프트를 쓰세요.", rate_limited:"사용량이 많아 잠시 뒤에 다시 시도해 주세요.", prompt_too_large:"자료가 너무 많습니다. 일부 파일을 빼고 다시 시도하세요.", image_rejected:"보낼 수 없는 이미지가 있습니다. 해당 사진을 빼 주세요.", images_unavailable:"이 화면에서는 사진을 보낼 수 없습니다. 사진을 빼고 다시 시도하세요.", invalid_json:"답을 서식으로 바꾸지 못했습니다. 다시 생성해 주세요.", refused:"이 자료로는 작성하지 않겠다는 답이 왔습니다. 자료를 확인해 주세요.", session_expired:"다시 로그인해 주세요.", bad_key:"API 키가 맞지 않습니다. Claude 연결 설정에서 키를 확인하세요.", upstream_error:"Claude 서버가 바쁩니다. 잠시 뒤 다시 시도해 주세요.", api_error:"API 요청이 거절됐습니다: "+(e?.message||"")}[e?.code] || ("생성 중 문제가 생겼습니다: "+(e?.message||e));
     status(msg, e?.code==="cancelled"?"":"err");
-    if(e?.code==="not_granted"||e?.code==="sampling_disabled"){ sample=null; denied=true; setPill(); }
+    if(e?.code==="not_granted"||e?.code==="sampling_disabled"){ denied=true; samplePerm="denied"; setPill(); openAi(); }
     if(e?.code==="bad_key"){ setPill(); openAi(); }
   }finally{ busy=null; btn.textContent="회의록 생성"; }
 }
@@ -1188,7 +1210,7 @@ $("#btnCopy").onclick=()=>{ if(!S.content){ toast("복사할 회의내용이 없
 
 /* ---------- 불러오기 ---------- */
 function reset(to){ S.photos.concat(S.receipts).forEach(p=>URL.revokeObjectURL(p.url)); S = to==="example"? exampleState() : blank(); $("#depth").value="auto"; fillInputs(); persist(); status(to==="example"?"예시 회의를 불러왔습니다.":"새로 쓰기 시작합니다."); }
-$("#loadSel").onchange=e=>{ const v=e.target.value; e.target.value=""; if(v) reset(v); };
+$("#loadSel").onchange=e=>{ const v=e.target.value; e.target.value=""; if(v==="bundle-save") return saveBundle(); if(v==="bundle-load") return $("#inBundle").click(); if(v) reset(v); };
 $("#btnNew2").onclick=()=>reset("new");
 
 /* ---------- 내보내기 ---------- */
@@ -1299,7 +1321,7 @@ const inClaude = !!window.claude;
 let denied=false;
 const API={ key:"", model:"", modelP:"", models:[] };
 try{ const k=JSON.parse(localStorage.getItem("kuminutes.api")||"null"); if(k&&k.key) Object.assign(API,k); }catch(e){}
-const aiMode = () => sample&&!denied ? "claude" : (API.key && API.model && !inClaude && CFG.ai.allowKey) ? "api" : null;
+const aiMode = () => sample&&!denied&&samplePerm!=="denied"&&samplePerm!=="unavailable" ? "claude" : (API.key && API.model && !inClaude && CFG.ai.allowKey) ? "api" : null;
 function aiImgMax(){ const m=aiMode(); return m==="claude" ? (imgLimits?.maxCount||0) : m==="api" ? 20 : 0; }
 async function blobToB64Jpeg(blob, max=1568){ const url=URL.createObjectURL(blob); try{ const im=new Image(); im.src=url; await im.decode(); const s=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight)); const c=document.createElement("canvas"); c.width=Math.round(im.naturalWidth*s); c.height=Math.round(im.naturalHeight*s); const g=c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height); g.drawImage(im,0,0,c.width,c.height); return c.toDataURL("image/jpeg",0.85).split(",")[1]; } finally{ URL.revokeObjectURL(url); } }
 function parseJsonLoose(t){ try{ return JSON.parse(t); }catch(e){} const m=t.match(/```(?:json)?\s*([\s\S]*?)```/); if(m){ try{ return JSON.parse(m[1]); }catch(e){} } const a=t.indexOf("{"), b=t.lastIndexOf("}"); if(a>=0&&b>a){ try{ return JSON.parse(t.slice(a,b+1)); }catch(e){} } throw {code:"invalid_json", message:"JSON을 찾지 못함", text:t}; }
@@ -1344,17 +1366,39 @@ async function apiTest(){
     fillModels(); saveApi(); setPill(); renderThumbs(); msg.textContent=`연결됐습니다 · 모델 ${API.models.length}개`;
   }catch(e){ msg.textContent = e instanceof TypeError ? "Anthropic 서버에 연결하지 못했습니다. 네트워크를 확인하세요." : e.message; }
 }
+let samplePerm="unknown", whoName="";
+async function readPerm(){ if(!inClaude||!sample){ samplePerm= inClaude?"unavailable":"none"; return samplePerm; } try{ const p=await window.claude.use("permissions"); samplePerm = p? await p.state("sample") : "prompt"; }catch(e){ samplePerm="prompt"; } if(denied) samplePerm="denied"; return samplePerm; }
 function openAi(){
-  const m=aiMode();
-  $("#aiNow").textContent = m==="claude"?"지금 본인 Claude 계정으로 연결되어 있습니다." : m==="api"?`지금 API 키로 연결되어 있습니다 · ${API.model}` : inClaude? "Claude 안에서 열었지만 Claude 사용이 허용되지 않았습니다." : "AI가 연결되어 있지 않습니다. 아래 방법 중 하나를 고르세요.";
-  $('[data-ai="open"]').hidden = inClaude;
+  const m=aiMode(), st=samplePerm;
+  const box=$("#aiNow"); let t="", d="", cls="off";
+  if(m==="claude" && st==="granted"){ t=`내 Claude 계정으로 연결됨${whoName?` · ${whoName}`:""}`; d="회의록 생성과 영수증 판독이 본인 Claude 계정으로 실행됩니다."; cls="on"; }
+  else if(m==="claude"){ t="내 Claude 계정 · 허용 전"; d="처음 생성할 때 Claude 사용 허용 창이 뜹니다. 지금 미리 허용할 수도 있습니다."; cls="on"; }
+  else if(m==="api"){ t="API 키로 연결됨"; d=`모델 ${API.model} · 요금은 API 계정에 청구됩니다.`; cls="api"; }
+  else if(inClaude){ t="Claude 사용이 허용되지 않음"; d="권한 설정에서 허용한 뒤 페이지를 새로 열어 주세요. 그동안은 대화창 복사·붙여넣기를 쓸 수 있습니다."; }
+  else { t="이 화면에서는 Claude에 로그인할 수 없습니다"; d="내 Claude 계정으로 쓰려면 Claude 페이지에서 여세요. 아래 순서를 따르면 지금 작업도 그대로 옮겨집니다."; }
+  box.className="aiNow "+cls; $("#aiNowT").textContent=t; $("#aiNowD").textContent=d;
+  $('[data-ai="mine-claude"]').hidden=!inClaude;
+  $('[data-ai="mine-file"]').hidden=inClaude;
   $('[data-ai="key"]').hidden = inClaude || !CFG.ai.allowKey;
   $('[data-ai="chat"]').hidden = !CFG.ai.allowChat;
-  $('[data-ai="perm"]').hidden = !(inClaude && !sample) && !denied;
-  $("#aiOpenLink").href=CFG.ai.openUrl||ARTIFACT_URL_DEF;
+  if(inClaude){
+    const ms=$("#mineState");
+    ms.textContent = st==="granted" ? `허용됨${whoName?` · ${whoName} 님의 Claude 계정`:""}. 사용량은 본인 Claude 요금제에서 차감됩니다.` : st==="prompt" ? "아직 허용하지 않았습니다. 허용하면 이 페이지가 본인 Claude 계정으로 회의록을 작성합니다. 사진·영수증 이미지도 함께 보냅니다." : st==="denied" ? "이 페이지의 Claude 사용을 거절한 상태입니다. 권한 설정에서 다시 켠 뒤 페이지를 새로 열어 주세요." : "이 화면에서는 Claude를 쓸 수 없습니다(조직 설정 또는 앱 버전). 대화창 복사·붙여넣기를 쓰세요.";
+    $("#mineAllow").hidden = st!=="prompt";
+    $("#minePerm").hidden = st!=="denied";
+    $("#mineReload").hidden = true;
+  } else {
+    $("#aiOpenLink").href=CFG.ai.openUrl||ARTIFACT_URL_DEF;
+    $("#handoffSave").disabled = !hasWork();
+  }
   $("#apiKey").value=API.key; $("#apiRemember").checked=(()=>{ try{ return !!localStorage.getItem("kuminutes.api"); }catch(e){ return false; } })(); fillModels();
+  if(m==="api") $('[data-ai="key"]').open=true;
   $("#aiModal").hidden=false;
 }
+$("#mineAllow").onclick=async()=>{ try{ const p=await window.claude.use("permissions"); if(p){ const r=await p.request(["sample"]); samplePerm=r.sample||samplePerm; } }catch(e){} if(samplePerm==="denied") denied=true; setPill(); openAi(); toast(samplePerm==="granted"?"Claude 사용을 허용했습니다":"허용하지 않았습니다"); };
+$("#minePerm").onclick=async()=>{ try{ const p=await window.claude.use("permissions"); if(p&&p.manage){ await p.manage(); await readPerm(); } }catch(e){ toast("아티팩트 화면 위쪽의 권한(Permissions) 메뉴에서 허용해 주세요"); } $("#mineReload").hidden=false; $("#mineState").textContent="권한을 바꿨다면 페이지를 새로 열어야 적용됩니다."; };
+$("#mineReload").onclick=()=>toast("브라우저에서 이 페이지를 새로 고침(F5)해 주세요");
+$("#handoffSave").onclick=()=>saveBundle();
 $("#aiPill").onclick=openAi;
 $("#aiClose").onclick=()=>$("#aiModal").hidden=true;
 $("#aiModal").addEventListener("keydown",e=>{ if(e.key==="Escape") $("#aiModal").hidden=true; });
@@ -1365,13 +1409,16 @@ $("#apiModelP").onchange=e=>{ API.modelP=e.target.value; saveApi(); };
 $("#apiRemember").onchange=saveApi;
 $("#apiForget").onclick=()=>{ Object.assign(API,{key:"",model:"",modelP:"",models:[]}); $("#apiKey").value=""; $("#apiRemember").checked=false; saveApi(); fillModels(); setPill(); $("#apiMsg").textContent="키를 지웠습니다."; };
 $("#aiChat").addEventListener("click",()=>{ const t=buildPrompt(); try{ navigator.clipboard.writeText(t).then(()=>toast("요청문을 복사했습니다. Claude 채팅에 붙여넣으세요"),()=>{}); }catch(e){} $("#aiModal").hidden=true; openPrompt(); });
-$("#aiPerm").onclick=async()=>{ try{ const p=await window.claude.use("permissions"); if(p&&p.manage){ await p.manage(); toast("권한을 바꿨다면 페이지를 새로 열어 주세요"); return; } }catch(e){} toast("아티팩트 화면 위쪽의 권한(Permissions) 메뉴에서 허용해 주세요"); };
-function setPill(){ const p=$("#aiPill"), m=aiMode(); p.className="ai-pill"+(m==="claude"?" on":m==="api"?" api":" off"); p.textContent= m==="claude"? "Claude 연결됨" : m==="api"? "API 연결됨" : "AI 연결하기"; }
+function setPill(){ const p=$("#aiPill"), m=aiMode(); const pending = m==="claude" && samplePerm==="prompt";
+  p.className="ai-pill"+(m==="claude"?(pending?" off":" on"):m==="api"?" api":" off");
+  p.textContent= m==="claude"? (pending? "Claude 허용 필요" : "내 Claude 계정") : m==="api"? "API 키 연결" : inClaude? "Claude 허용 안 됨" : "Claude 연결하기";
+  p.title = m==="claude" && whoName ? `${whoName} 님의 Claude 계정으로 실행` : "Claude 연결 설정"; }
 (async()=>{
   try{ sample = window.claude ? await window.claude.use("sample") : null; }catch(e){ sample=null; }
   if(sample){ try{ const l=await sample.limits(); imgLimits=l.images||null; }catch(e){ imgLimits=null; } }
-  setPill(); renderThumbs();
+  await readPerm(); setPill(); renderThumbs();
   try{ downloads = window.claude ? await window.claude.use("downloads") : null; }catch(e){ downloads=null; }
+  if(inClaude){ try{ const u=await window.claude.use("user"); if(u){ whoName=(await u.name())||""; setPill(); } }catch(e){} }
 
 })();
 
@@ -1391,6 +1438,32 @@ $("#tmCopy").onclick=()=>copyText(teamsText(), $("#tmMsg"));
 $("#tmClose").onclick=()=>$("#teamsModal").hidden=true;
 $("#teamsModal").addEventListener("keydown",e=>{ if(e.key==="Escape") $("#teamsModal").hidden=true; });
 
+
+
+/* ---------- 작업 파일 (넘기기·보관) ---------- */
+function hasWork(){ return !!(S.docs.length||S.photos.length||S.receipts.length||S.talk.trim()||S.content||S.att.some(a=>a.name||a.org)||S.info.title) && !S.example; }
+async function saveBundle(){
+  status("작업 파일을 만드는 중…","busy");
+  try{
+    const img=async l=>Promise.all(l.map(async p=>({name:p.name, proof:!!p.proof, data: p.data || await blobToDataURL(p.blob)})));
+    const {photos,receipts,...rest}=S;
+    const b={kind:"ku-minutes-work", v:1, savedAt:new Date().toISOString(), state:rest, photos:await img(photos), receipts:await img(receipts), opts:O};
+    const name=`회의김군작업_${(S.info.date||"").replace(/-/g,"")||"날짜미정"}_${(S.info.title||"회의").replace(/[\\/:*?"<>|\[\]]/g,"").slice(0,30).trim()}.json`;
+    status(""); await saveFile(name, JSON.stringify(b));
+  }catch(e){ status("작업 파일을 만들지 못했습니다: "+(e?.message||e),"err"); }
+}
+async function dataURLtoBlob(u){ const r=await fetch(u); return await r.blob(); }
+$("#inBundle").onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=""; if(!f) return;
+  try{
+    const b=JSON.parse(await f.text()); if(b.kind!=="ku-minutes-work") throw new Error("회의김군 작업 파일이 아닙니다");
+    S.photos.concat(S.receipts).forEach(p=>URL.revokeObjectURL(p.url));
+    S={...blank(), ...b.state, photos:[], receipts:[], example:false};
+    for(const [k,list] of [["photos",b.photos||[]],["receipts",b.receipts||[]]]) for(const p of list){ try{ const bl=await dataURLtoBlob(p.data); S[k].push({name:p.name, proof:!!p.proof, blob:bl, url:URL.createObjectURL(bl)}); }catch(err){} }
+    if(b.opts){ for(const k of Object.keys(b.opts)) if(k in O) O[k]=b.opts[k]; enforceOpts(); }
+    fillInputs(); persist(); status(`작업을 불러왔습니다 · 자료 ${S.docs.length}건, 사진 ${S.photos.length}장, 영수증 ${S.receipts.length}장`);
+  }catch(err){ status("작업 파일을 읽지 못했습니다: "+err.message,"err"); }
+};
 
 /* ---------- 관리자 ---------- */
 let cfgDb=null;
